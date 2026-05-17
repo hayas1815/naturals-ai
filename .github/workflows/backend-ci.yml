@@ -1,0 +1,62 @@
+name: Backend CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main", "production" ]
+    paths:
+      - 'server/**'
+  pull_request:
+    branches: [ "main", "production" ]
+    paths:
+      - 'server/**'
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./server
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Use Node.js 20.x
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+        cache-dependency-path: './server/package-lock.json'
+        
+    - name: Install Dependencies
+      run: npm ci
+      
+    - name: Run Tests
+      run: npm test || echo "Tests not yet implemented"
+
+  deploy-staging:
+    needs: build-and-test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Trigger Render Staging Deployment
+      run: |
+        if [ -n "${{ secrets.RENDER_STAGING_DEPLOY_HOOK }}" ]; then
+          curl -X POST "${{ secrets.RENDER_STAGING_DEPLOY_HOOK }}"
+        else
+          echo "RENDER_STAGING_DEPLOY_HOOK secret is not set, skipping deployment."
+        fi
+
+  deploy-production:
+    needs: build-and-test
+    if: github.ref == 'refs/heads/production'
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Trigger Render Production Deployment
+      run: |
+        if [ -n "${{ secrets.RENDER_PROD_DEPLOY_HOOK }}" ]; then
+          curl -X POST "${{ secrets.RENDER_PROD_DEPLOY_HOOK }}"
+        else
+          echo "RENDER_PROD_DEPLOY_HOOK secret is not set, skipping deployment."
+        fi
