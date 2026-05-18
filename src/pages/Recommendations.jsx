@@ -2,6 +2,13 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { ShoppingBag, ArrowRight, Loader2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabase';
+
+const FALLBACK_PRODUCTS = [
+  { id: 1, name: "Cellular Renewal Serum", type: "Night Repair", match: 98, price: "$120" },
+  { id: 2, name: "DNA Defense Cream", type: "Daily Protection", match: 94, price: "$85" },
+  { id: 3, name: "Hydro-Active Essence", type: "Hydration", match: 91, price: "$65" },
+];
 
 export default function Recommendations() {
   const { profile } = useAuth();
@@ -12,40 +19,31 @@ export default function Recommendations() {
   useEffect(() => {
     const fetchRecommendations = async () => {
       try {
-        const profileId = profile?.id || '11111111-1111-1111-1111-111111111111';
         const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-        
-        const response = await fetch(`${apiUrl}/recommendations/${profileId}`);
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
+
+        const response = await fetch(`${apiUrl}/recommendations/me`, {
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+        });
         const result = await response.json();
 
-        if (!response.ok) {
-          throw new Error(result.message || 'Failed to fetch recommendations');
-        }
+        if (!response.ok) throw new Error(result.message || 'Failed to fetch recommendations');
 
         if (result.data && result.data.length > 0) {
-           setProducts(result.data.map(rec => ({
-             id: rec.id,
-             name: rec.products?.name,
-             type: rec.products?.category,
-             match: rec.match_score,
-             price: `$${rec.products?.price}`
-           })));
+          setProducts(result.data.map(rec => ({
+            id: rec.id,
+            name: rec.products?.name || 'Unnamed Product',
+            type: rec.products?.category || 'Beauty',
+            match: rec.match_confidence,
+            price: rec.products?.price ? `$${rec.products.price}` : 'N/A',
+          })));
         } else {
-           // Fallback to static if no db data exists
-           setProducts([
-            { id: 1, name: "Cellular Renewal Serum", type: "Night Repair", match: 98, price: "$120" },
-            { id: 2, name: "DNA Defense Cream", type: "Daily Protection", match: 94, price: "$85" },
-            { id: 3, name: "Hydro-Active Essence", type: "Hydration", match: 91, price: "$65" }
-          ]);
+          setProducts(FALLBACK_PRODUCTS);
         }
       } catch (err) {
         setError(err.message);
-        // Fallback for demo
-        setProducts([
-          { id: 1, name: "Cellular Renewal Serum", type: "Night Repair", match: 98, price: "$120" },
-          { id: 2, name: "DNA Defense Cream", type: "Daily Protection", match: 94, price: "$85" },
-          { id: 3, name: "Hydro-Active Essence", type: "Hydration", match: 91, price: "$65" }
-        ]);
+        setProducts(FALLBACK_PRODUCTS);
       } finally {
         setLoading(false);
       }

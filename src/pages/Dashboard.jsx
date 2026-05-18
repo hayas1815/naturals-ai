@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Fingerprint, Droplets, Sun, Wind, Loader2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabase';
 
 export default function Dashboard() {
   const { profile } = useAuth();
@@ -13,32 +14,51 @@ export default function Dashboard() {
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
-        const pId = profile?.id || '11111111-1111-1111-1111-111111111111';
         const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-        
-        const response = await fetch(`${apiUrl}/profiles/${pId}/dashboard`);
+        // Get the current session JWT to authenticate the request
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
+
+        const response = await fetch(`${apiUrl}/profiles/me/dashboard`, {
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+        });
         const result = await response.json();
 
-        if (!response.ok) {
-          throw new Error(result.message || 'Failed to fetch data');
-        }
+        if (!response.ok) throw new Error(result.message || 'Failed to fetch data');
 
-        // Format history for chart
-        const formattedHistory = result.data.history.map(item => ({
-          name: new Date(item.recorded_at).toLocaleDateString('en-US', { month: 'short' }),
-          hydration: item.hydration_level,
-          elasticity: item.elasticity_score
-        }));
+        // Format beauty_timelines history for chart
+        const allMetrics = result.data.history || [];
+        const months = [...new Set(allMetrics.map(h => new Date(h.recorded_at).toLocaleDateString('en-US', { month: 'short' })))];
+        const formattedHistory = months.map(month => {
+          const entries = allMetrics.filter(h => new Date(h.recorded_at).toLocaleDateString('en-US', { month: 'short' }) === month);
+          const row = { name: month };
+          entries.forEach(e => { row[e.metric_name] = parseFloat(e.metric_value); });
+          return row;
+        });
 
         setData({
           profile: result.data.profile,
+          scores: result.data.scores,
+          latestReport: result.data.latestReport,
           history: formattedHistory.length > 0 ? formattedHistory : [
             { name: 'Jan', hydration: 65, elasticity: 70 },
-            { name: 'Feb', hydration: 68, elasticity: 72 } // fallback if empty
-          ]
+            { name: 'Feb', hydration: 72, elasticity: 75 },
+            { name: 'Mar', hydration: 78, elasticity: 79 },
+            { name: 'Apr', hydration: 80, elasticity: 82 },
+          ],
         });
       } catch (err) {
         setError(err.message);
+        // Graceful fallback so UI doesn't break while DB is being populated
+        setData({
+          profile: null,
+          history: [
+            { name: 'Jan', hydration: 65, elasticity: 70 },
+            { name: 'Feb', hydration: 72, elasticity: 75 },
+            { name: 'Mar', hydration: 78, elasticity: 79 },
+            { name: 'Apr', hydration: 80, elasticity: 82 },
+          ]
+        });
       } finally {
         setLoading(false);
       }

@@ -11,25 +11,61 @@ const errorHandler = require('./middleware/errorHandler');
 const profileRoutes = require('./routes/profile.routes');
 const aiRoutes = require('./routes/ai.routes');
 const recommendationRoutes = require('./routes/recommendation.routes');
+const adminRoutes = require('./routes/admin.routes');
 
 const app = express();
 
 // Security Middleware
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      connectSrc: ["'self'", "https://*.supabase.co", "https://generativelanguage.googleapis.com"],
+      imgSrc: ["'self'", "data:", "https://res.cloudinary.com"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      upgradeInsecureRequests: [],
+    },
+  },
+  hsts: {
+    maxAge: 31536000,
+    includeSubDomains: true,
+    preload: true
+  }
+}));
 app.use(cors({
     origin: process.env.FRONTEND_URL || 'http://localhost:5173',
     credentials: true
 }));
 
-// Rate Limiting
-const limiter = rateLimit({
+// Tiered Rate Limiting
+const globalLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // Limit each IP to 100 requests per `window` (here, per 15 minutes)
+    max: 100, // Limit each IP to 100 requests per window
     standardHeaders: true,
     legacyHeaders: false,
-    message: 'Too many requests from this IP, please try again later.'
+    message: { success: false, message: 'Too many requests, please try again later.' }
 });
-app.use('/api', limiter);
+
+const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 15, // Stricter limit for auth endpoints
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { success: false, message: 'Too many authentication attempts, please try again later.' }
+});
+
+const uploadLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000, // 1 hour
+    max: 20, // Max 20 scans per hour to prevent AI/Cloudinary abuse
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { success: false, message: 'Scan limit reached, please try again next hour.' }
+});
+
+app.use('/api', globalLimiter);
+app.use('/api/auth', authLimiter);
+app.use('/api/ai/analyze', uploadLimiter);
 
 // Body Parsers
 app.use(express.json({ limit: '10mb' }));
@@ -50,6 +86,7 @@ app.get('/health', (req, res) => {
 app.use('/api/profiles', profileRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/recommendations', recommendationRoutes);
+app.use('/api/admin', adminRoutes);
 
 // 404 Handler
 app.use((req, res, next) => {
