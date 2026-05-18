@@ -2,9 +2,22 @@
 -- 1. EXTENSIONS & TYPES
 -- ==============================================================================
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-CREATE TYPE user_role AS ENUM ('customer', 'stylist', 'admin');
-CREATE TYPE appointment_status AS ENUM ('pending', 'confirmed', 'completed', 'cancelled');
-CREATE TYPE notification_type AS ENUM ('appointment', 'ai_report_ready', 'recommendation', 'system');
+
+-- Idempotent type creation (safe to re-run)
+DO $$ BEGIN
+    CREATE TYPE user_role AS ENUM ('customer', 'stylist', 'admin');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+    CREATE TYPE appointment_status AS ENUM ('pending', 'confirmed', 'completed', 'cancelled');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+    CREATE TYPE notification_type AS ENUM ('appointment', 'ai_report_ready', 'recommendation', 'system');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- ==============================================================================
 -- 2. TABLES
