@@ -1,0 +1,30 @@
+services:
+  # ─── Backend Express API ─────────────────────────────────────────────────────
+  - type: web
+    name: naturals-ai-server
+    env: node
+    region: singapore
+    plan: free
+    rootDir: server
+    buildCommand: npm install
+    startCommand: node src/index.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: FRONTEND_URL
+        sync: false   # Set in Render dashboard: https://naturals-ai.vercel.app
+      - key: SUPABASE_URL
+        sync: false   # Set in Render dashboard
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false   # Set in Render dashboard (secret)
+      - key: GEMINI_API_KEY
+        sync: false   # Set in Render dashboard (secret)
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false   # Set in Render dashboard (secret)
